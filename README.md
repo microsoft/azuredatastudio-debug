@@ -1,33 +1,57 @@
-# Project
+# Azure Data Studio Debug
 
-> This repo has been populated by an initial template to help get you started. Please
-> make sure to update the content to build a great experience for community-building.
+This extension forms the [Azure Data Studio](https://docs.microsoft.com/en-us/sql/azure-data-studio) extension debugging experience.
 
-As the maintainer of this project, please make a few updates:
+# Release Notes
 
-- Improving this README.MD file to provide a great experience
-- Updating SUPPORT.MD with content about this project's support experience
-- Understanding the security reporting process in SECURITY.MD
-- Remove this section from the README
+## 1.2
+Renamed the extension to Azure Data Studio Debug, matching the rename of Azure Data Studio (previously known as SQL Operations Studio).
 
-## Contributing
+## 1.0.2
+Fixed issue where use of the `sqlops` default runtimeExecutable target didn't work as expected. Testing of this has been verified on macOS and Windows, but not Linux.
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
 
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+# Building and debugging an extension
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+## Prerequisites
+To develop an extension you need [Node.js](https://nodejs.org/en/) installed and available in your `$PATH`. Node.js includes [npm](https://www.npmjs.com/), the Node.js Package Manager, which will be used to install the extension generator.
 
-## Trademarks
+## Install the extension generator
+Install Yeoman and the Azure Data Studio Extension generator from the command prompt:
 
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
-trademarks or logos is subject to and must follow 
-[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
-Any use of third-party trademarks or logos are subject to those third-party's policies.
+```sh
+npm install -g yo generator-sqlops
+```
+
+## Run yo sqlops
+The Yeoman generator will walk you through the steps required to create your customization or extension prompting for the required information.
+
+To launch the generator, type the following in a command prompt:
+
+```sh
+yo sqlops
+```
+
+##  Generate a new extension
+Pick the `New Extension (Typescript)` option to quickly get started with an extension
+
+## Debug your extension
+* Press `F5` or click the `Debug` icon and click `Start`
+* A new instance of Azure Data Studio will start in a special mode (`Extension Development Host`) and *this new instance is now aware of your extension*.
+* Press `ctrl+shift+P` (Windows/Linux) or `cmd+shift+P` (macOS) and run the command named Hello World.
+* Congratulations! You've just created and executed your first Azure Data Studio command!
+
+You can now add breakpoints to your code and debug as needed.
+
+## Next steps
+Take a look at the [extension samples](https://github.com/Microsoft/sqlopsstudio/tree/master/samples) for examples of the type of extension points added to Azure Data Studio. Also look at the [VSCode Extensibility Reference](https://code.visualstudio.com/docs/extensions/overview) - most of the extension points will work, with the exclusion of the debug namespace.
+
+Contact the team on [gitter](https://gitter.im/Microsoft/sqlopsstudio) or via our [issues page](https://github.com/Microsoft/sqlopsstudio/issues) if you have questions on adding extensions.
+
+See a general overview of debugging in VS Code [here](https://code.visualstudio.com/docs/editor/debugging).
+
+# License
+
+Copyright (c) Microsoft. All rights reserved.
+
+Licensed under the [MIT](LICENSE.txt) License.
