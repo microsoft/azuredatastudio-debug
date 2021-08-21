@@ -21,6 +21,14 @@ jobs:
       versionSpec: $(nodeVersion)
       checkLatest: true
 
+  - ${{ if eq(parameters.name, 'Windows') }}:
+    - task: securedevelopmentteam.vss-secure-development-tools.build-task-credscan.CredScan@2
+      displayName: 'Run CredScan'
+      inputs:
+        verboseOutput: true
+        debugMode: false
+      continueOnError: true
+
   - task: Npm@1
     displayName: npm install
     inputs:
@@ -56,6 +64,11 @@ jobs:
       verbose: false
       customCommand: 'run tslint'
 
+  - task: ms.vss-governance-buildtask.governance-build-task-component-detection.ComponentGovernanceComponentDetection@0
+    displayName: 'Component Detection'
+    inputs:
+      ignoreDirectories: 'testdata'
+
   - task: Npm@1
     displayName: npm package
     inputs:
@@ -74,3 +87,28 @@ jobs:
       PathtoPublish: '$(Build.ArtifactStagingDirectory)'
       ArtifactName: drop
       publishLocation: Container
+
+  - ${{ if eq(parameters.name, 'Windows') }}:
+    - task: securedevelopmentteam.vss-secure-development-tools.build-task-uploadtotsa.TSAUpload@1
+      displayName: 'TSA upload to Codebase: vscode-node-debug2_master Version: TsaV2'
+      inputs:
+        tsaVersion: TsaV2
+        codebase: NewOrUpdate
+        codeBaseName: 'vscode-node-debug2_master'
+        notificationAlias: 'webdiag-extensions@microsoft.com'
+        instanceUrlForTsaV2: DEVDIV
+        projectNameDEVDIV: DevDiv
+        areaPath: 'DevDiv\TypeScript\HTML Experiences\Diagnostics\Debugger'
+        uploadAPIScan: false
+        uploadBinSkim: false
+        uploadFortifySCA: false
+        uploadFxCop: false
+        uploadModernCop: false
+        uploadPoliCheck: false
+        uploadPREfast: false
+        uploadRoslyn: false
+        uploadTSLint: false
+
+  - ${{ if eq(parameters.name, 'Windows') }}:
+    - task: securedevelopmentteam.vss-secure-development-tools.build-task-publishsecurityanalysislogs.PublishSecurityAnalysisLogs@2
+      displayName: 'Publish Security Analysis Logs'

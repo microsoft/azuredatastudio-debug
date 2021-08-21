@@ -29,14 +29,14 @@ async function patchLaunchArgs(launchArgs: any): Promise<void> {
     if (!launchArgs.port) {
         launchArgs.port = await findPort();
         launchArgs.runtimeArgs = launchArgs.runtimeArgs || [];
-        launchArgs.runtimeArgs.push(`--inspect=${launchArgs.port}`, '--debug-brk');
+        launchArgs.runtimeArgs.push(`--inspect-brk=${launchArgs.port}`);
     }
 }
 
 export function setup(_opts?: { port?: number, alwaysDumpLogs?: boolean }) {
     const opts = Object.assign(<ts.ISetupOpts>{
         entryPoint: './out/src/nodeDebug.js',
-        type: 'node2',
+        type: 'legacy-node2',
         patchLaunchArgs
     }, _opts);
 
