@@ -79,8 +79,8 @@ function doBuild(buildNls, failOnError) {
         };
 }
 
-gulp.task('clean', () => {
-    return del(['out/**', 'package.nls.*.json', 'vscode-node-debug2-*.vsix']);
+gulp.task('clean', function() {
+	return del(['out/**', 'package.nls.*.json', 'azuredatastudio-debug-*.vsix']);
 });
 
 gulp.task('copy-scripts', () => {
@@ -106,10 +106,6 @@ gulp.task('tslint', () => {
             formatter: 'verbose'
         }))
         .pipe(tslint.report());
-});
-
-gulp.task('clean', function() {
-	return del(['out/**', 'package.nls.*.json', 'azuredatastudio-debug-*.vsix']);
 });
 
 function verifyNotALinkedModule(modulePath) {
