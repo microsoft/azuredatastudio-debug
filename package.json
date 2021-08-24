@@ -66,7 +66,7 @@
     "package": "gulp package"
   },
   "engines": {
-    "vscode": "^1.60.0-insider",
+    "vscode": "^1.45.1",
     "node": ">=10"
   },
   "repository": {

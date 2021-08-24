@@ -6,14 +6,14 @@ import { ChromeDebugAdapter, chromeUtils, ISourceMapPathOverrides, utils as Core
 const telemetry = CoreTelemetry.telemetry;
 
 import { DebugProtocol } from 'vscode-debugprotocol';
-import { OutputEvent, CapabilitiesEvent, Event } from 'vscode-debugadapter';
+import { CapabilitiesEvent, Event, OutputEvent } from 'vscode-debugadapter';
 import { ErrorWithMessage } from 'vscode-chrome-debug-core/out/src/errors';
 
 import * as path from 'path';
 import * as fs from 'fs';
 import * as cp from 'child_process';
 
-import { ILaunchRequestArguments, IAttachRequestArguments, ICommonRequestArgs, ILaunchVSCodeArguments, ILaunchVSCodeArgument } from './nodeDebugInterfaces';
+import { ILaunchRequestArguments, IAttachRequestArguments, ICommonRequestArgs } from './nodeDebugInterfaces';
 import * as pathUtils from './pathUtils';
 import * as utils from './utils';
 import * as errors from './errors';
@@ -50,7 +50,7 @@ export class ProcessEvent extends Event implements DebugProtocol.ProcessEvent {
 }
 export class NodeDebugAdapter extends ChromeDebugAdapter {
     private static NODE = 'node';
-    private static RUNINTERMINAL_TIMEOUT = 5000;
+    // private static RUNINTERMINAL_TIMEOUT = 5000; {{SQL CARBON EDIT}} Not used
     private static NODE_TERMINATION_POLL_INTERVAL = 3000;
     private static DEBUG_BRK_DEP_MSG = /\(node:\d+\) \[DEP0062\] DeprecationWarning: `node --inspect --debug-brk` is deprecated\. Please use `node --inspect-brk` instead\.\s*/;
 
@@ -71,7 +71,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
     private _handlingEarlyNodeMsgs = true;
     private _captureFromStd: boolean = false;
 
-    private _supportsRunInTerminalRequest: boolean;
+    // private _supportsRunInTerminalRequest: boolean; {{SQL CARBON EDIT}} Not needed - only support ext host debugging
     private _restartMode: boolean;
     private _isTerminated: boolean;
     private _adapterID: string;
@@ -134,7 +134,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
     public initialize(args: DebugProtocol.InitializeRequestArguments): DebugProtocol.Capabilities {
         this._adapterID = args.adapterID;
         this._promiseRejectExceptionFilterEnabled = this.isExtensionHost();
-        this._supportsRunInTerminalRequest = args.supportsRunInTerminalRequest;
+        // this._supportsRunInTerminalRequest = args.supportsRunInTerminalRequest; {{SQL CARBON EDIT}} Not needed - only support ext host debugging
 
         if (args.locale) {
             localize = nls.config({ locale: args.locale })();
@@ -170,20 +170,38 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
             }));
         }
 
-        this._continueAfterConfigDone = !args.stopOnEntry;
-
-        if (this.isExtensionHost()) {
-            return this.extensionHostLaunch(args, port);
-        }
-
+        // {{SQL CARBON EDIT}} Search for ADS installation since we need to start up a new instance of ADS (VS Code just opens a new window of itself for debugging)
         let runtimeExecutable = args.runtimeExecutable;
         if (args.useWSL) {
             runtimeExecutable = runtimeExecutable || NodeDebugAdapter.NODE;
         } else if (runtimeExecutable) {
             if (path.isAbsolute(runtimeExecutable)) {
-                const re = pathUtils.findExecutable(runtimeExecutable, args.env);
+                let re = pathUtils.findExecutable(runtimeExecutable, args.env);
                 if (!re) {
                     return this.getNotExistErrorResponse('runtimeExecutable', runtimeExecutable);
+                }
+
+                if (runtimeExecutable.toLowerCase() === 'azuredatastudio') {
+                    // should be under a /bin directory. Walk up to find the actual path
+                    // Must transform and find the actual path
+                    let lstat: fs.Stats = fs.lstatSync(re);
+                    if (lstat && lstat.isSymbolicLink()) {
+                        let linkedPath = fs.realpathSync(re);
+                        re = linkedPath;
+                    }
+                    let dir = path.normalize(path.join(path.dirname(re), '..'));
+                    switch (process.platform) {
+                        case 'darwin':
+                            re = path.join(dir, '..', '..', 'MacOS', 'Electron');
+                            break;
+                        case 'win32':
+                            re = path.join(dir, 'azuredatastudio.exe');
+                            break;
+                        default:
+                            re = path.join(dir, 'azuredatastudio');
+                            break;
+                    }
+                    logger.log(`azuredatastudio path is ${re}`);
                 }
 
                 runtimeExecutable = re;
@@ -204,142 +222,215 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
             // use node from PATH
             runtimeExecutable = re;
         }
+        // {{SQL CARBON EDIT}} End
 
-        let programPath = args.program;
-        if (programPath) {
-            if (!path.isAbsolute(programPath)) {
-                return this.getRelativePathErrorResponse('program', programPath);
-            }
+        this._continueAfterConfigDone = !args.stopOnEntry;
 
-            if (!fs.existsSync(programPath)) {
-                if (fs.existsSync(programPath + '.js')) {
-                    programPath += '.js';
-                } else {
-                    return this.getNotExistErrorResponse('program', programPath);
-                }
-            }
-
-            programPath = path.normalize(programPath);
-            if (pathUtils.normalizeDriveLetter(programPath) !== pathUtils.realCasePath(programPath)) {
-                logger.warn(localize('program.path.case.mismatch.warning', 'Program path uses differently cased character as file on disk; this might result in breakpoints not being hit.'));
-            }
+        if (this.isExtensionHost()) {
+            return this.extensionHostLaunch(args, runtimeExecutable, port);
         }
 
-        this._captureFromStd = args.outputCapture === 'std';
+        return Promise.reject('Only Azure Data Studio extension host development is supported');
 
-        if (args.__debuggablePatterns) {
-            this._jsDeterminant.updatePatterns(args.__debuggablePatterns);
-        }
+        // {{SQL CARBON EDIT}} Not needed - only support ext host debugging
+        // let runtimeExecutable = args.runtimeExecutable;
+        // if (args.useWSL) {
+        //     runtimeExecutable = runtimeExecutable || NodeDebugAdapter.NODE;
+        // } else if (runtimeExecutable) {
+        //     if (path.isAbsolute(runtimeExecutable)) {
+        //         const re = pathUtils.findExecutable(runtimeExecutable, args.env);
+        //         if (!re) {
+        //             return this.getNotExistErrorResponse('runtimeExecutable', runtimeExecutable);
+        //         }
 
-        const resolvedProgramPath = await this.resolveProgramPath(programPath, args.sourceMaps);
-        let program: string;
-        let cwd = args.cwd;
-        if (cwd) {
-            if (!path.isAbsolute(cwd)) {
-                return this.getRelativePathErrorResponse('cwd', cwd);
-            }
+        //         runtimeExecutable = re;
+        //     } else {
+        //         const re = pathUtils.findOnPath(runtimeExecutable, args.env);
+        //         if (!re) {
+        //             return this.getRuntimeNotOnPathErrorResponse(runtimeExecutable);
+        //         }
 
-            if (!fs.existsSync(cwd)) {
-                return this.getNotExistErrorResponse('cwd', cwd);
-            }
+        //         runtimeExecutable = re;
+        //     }
+        // } else {
+        //     const re = pathUtils.findOnPath(NodeDebugAdapter.NODE, args.env);
+        //     if (!re) {
+        //         return Promise.reject(errors.runtimeNotFound(NodeDebugAdapter.NODE));
+        //     }
 
-            // if working dir is given and if the executable is within that folder, we make the executable path relative to the working dir
-            if (resolvedProgramPath) {
-                program = await pathUtils.isSymlinkedPath(cwd) ?
-                    resolvedProgramPath :
-                    path.relative(cwd, resolvedProgramPath);
-            }
-        } else if (resolvedProgramPath) {
-            // if no working dir given, we use the direct folder of the executable
-            cwd = path.dirname(resolvedProgramPath);
-            program = await pathUtils.isSymlinkedPath(cwd) ?
-                resolvedProgramPath :
-                path.basename(resolvedProgramPath);
-        }
+        //     // use node from PATH
+        //     runtimeExecutable = re;
+        // }
 
-        const runtimeArgs = args.runtimeArgs || [];
-        const programArgs = args.args || [];
+        // let programPath = args.program;
+        // if (programPath) {
+        //     if (!path.isAbsolute(programPath)) {
+        //         return this.getRelativePathErrorResponse('program', programPath);
+        //     }
 
-        const debugArgs = detectSupportedDebugArgsForLaunch(args, runtimeExecutable, args.env);
-        let launchArgs = [];
-        if (!args.noDebug && !args.port) {
-            // Always stop on entry to set breakpoints
-            if (debugArgs === DebugArgs.Inspect_DebugBrk) {
-                launchArgs.push(`--inspect=${port}`);
-                launchArgs.push('--debug-brk');
-            } else {
-                launchArgs.push(`--inspect-brk=${port}`);
-            }
-        }
+        //     if (!fs.existsSync(programPath)) {
+        //         if (fs.existsSync(programPath + '.js')) {
+        //             programPath += '.js';
+        //         } else {
+        //             return this.getNotExistErrorResponse('program', programPath);
+        //         }
+        //     }
 
-        launchArgs = runtimeArgs.concat(launchArgs, program ? [program] : [], programArgs);
+        //     programPath = path.normalize(programPath);
+        //     if (pathUtils.normalizeDriveLetter(programPath) !== pathUtils.realCasePath(programPath)) {
+        //         logger.warn(localize('program.path.case.mismatch.warning', 'Program path uses differently cased character as file on disk; this might result in breakpoints not being hit.'));
+        //     }
+        // }
 
-        const wslLaunchArgs = wsl.createLaunchArg(args.useWSL, args.console === 'externalTerminal', cwd, runtimeExecutable, launchArgs, program);
-        // if using subsystem for linux, we will trick the debugger to map source files
-        if (args.useWSL && !args.localRoot && !args.remoteRoot) {
-            this.pathTransformer.attach(<IAttachRequestArguments>{
-                remoteRoot: wslLaunchArgs.remoteRoot,
-                localRoot: wslLaunchArgs.localRoot
-            });
-        }
+        // this._captureFromStd = args.outputCapture === 'std';
 
-        const envArgs = this.collectEnvFileArgs(args) || args.env;
-        if ((args.console === 'integratedTerminal' || args.console === 'externalTerminal') && this._supportsRunInTerminalRequest) {
-            const termArgs: DebugProtocol.RunInTerminalRequestArguments = {
-                kind: args.console === 'integratedTerminal' ? 'integrated' : 'external',
-                title: localize('node.console.title', 'Node Debug Console'),
-                cwd,
-                args: wslLaunchArgs.combined,
-                env: envArgs
-            };
-            await this.launchInTerminal(termArgs);
-            if (args.noDebug) {
-                this.terminateSession('cannot track process');
-            }
-        } else if (!args.console || args.console === 'internalConsole') {
-            await this.launchInInternalConsole(wslLaunchArgs.executable, wslLaunchArgs.args, envArgs, cwd);
-        } else {
-            throw errors.unknownConsoleType(args.console);
-        }
+        // if (args.__debuggablePatterns) {
+        //     this._jsDeterminant.updatePatterns(args.__debuggablePatterns);
+        // }
 
-        if (!args.noDebug) {
-            await this.doAttach(port, undefined, args.address, args.timeout, undefined, args.extraCRDPChannelPort);
-        }
+        // const resolvedProgramPath = await this.resolveProgramPath(programPath, args.sourceMaps);
+        // let program: string;
+        // let cwd = args.cwd;
+        // if (cwd) {
+        //     if (!path.isAbsolute(cwd)) {
+        //         return this.getRelativePathErrorResponse('cwd', cwd);
+        //     }
+
+        //     if (!fs.existsSync(cwd)) {
+        //         return this.getNotExistErrorResponse('cwd', cwd);
+        //     }
+
+        //     // if working dir is given and if the executable is within that folder, we make the executable path relative to the working dir
+        //     if (resolvedProgramPath) {
+        //         program = await pathUtils.isSymlinkedPath(cwd) ?
+        //             resolvedProgramPath :
+        //             path.relative(cwd, resolvedProgramPath);
+        //     }
+        // } else if (resolvedProgramPath) {
+        //     // if no working dir given, we use the direct folder of the executable
+        //     cwd = path.dirname(resolvedProgramPath);
+        //     program = await pathUtils.isSymlinkedPath(cwd) ?
+        //         resolvedProgramPath :
+        //         path.basename(resolvedProgramPath);
+        // }
+
+        // const runtimeArgs = args.runtimeArgs || [];
+        // const programArgs = args.args || [];
+
+        // const debugArgs = detectSupportedDebugArgsForLaunch(args, runtimeExecutable, args.env);
+        // let launchArgs = [];
+        // if (!args.noDebug && !args.port) {
+        //     // Always stop on entry to set breakpoints
+        //     if (debugArgs === DebugArgs.Inspect_DebugBrk) {
+        //         launchArgs.push(`--inspect=${port}`);
+        //         launchArgs.push('--debug-brk');
+        //     } else {
+        //         launchArgs.push(`--inspect-brk=${port}`);
+        //     }
+        // }
+
+        // launchArgs = runtimeArgs.concat(launchArgs, program ? [program] : [], programArgs);
+
+        // const wslLaunchArgs = wsl.createLaunchArg(args.useWSL, args.console === 'externalTerminal', cwd, runtimeExecutable, launchArgs, program);
+        // // if using subsystem for linux, we will trick the debugger to map source files
+        // if (args.useWSL && !args.localRoot && !args.remoteRoot) {
+        //     this.pathTransformer.attach(<IAttachRequestArguments>{
+        //         remoteRoot: wslLaunchArgs.remoteRoot,
+        //         localRoot: wslLaunchArgs.localRoot
+        //     });
+        // }
+
+        // const envArgs = this.collectEnvFileArgs(args) || args.env;
+        // if ((args.console === 'integratedTerminal' || args.console === 'externalTerminal') && this._supportsRunInTerminalRequest) {
+        //     const termArgs: DebugProtocol.RunInTerminalRequestArguments = {
+        //         kind: args.console === 'integratedTerminal' ? 'integrated' : 'external',
+        //         title: localize('node.console.title', 'Node Debug Console'),
+        //         cwd,
+        //         args: wslLaunchArgs.combined,
+        //         env: envArgs
+        //     };
+        //     await this.launchInTerminal(termArgs);
+        //     if (args.noDebug) {
+        //         this.terminateSession('cannot track process');
+        //     }
+        // } else if (!args.console || args.console === 'internalConsole') {
+        //     await this.launchInInternalConsole(wslLaunchArgs.executable, wslLaunchArgs.args, envArgs, cwd);
+        // } else {
+        //     throw errors.unknownConsoleType(args.console);
+        // }
+
+        // if (!args.noDebug) {
+        //     await this.doAttach(port, undefined, args.address, args.timeout, undefined, args.extraCRDPChannelPort);
+        // }
     }
 
-    private extensionHostLaunch(launchArgs: ILaunchRequestArguments, debugPort: number): Promise<void> {
+    private extensionHostLaunch(launchArgs: ILaunchRequestArguments, runtimeExecutable: string, debugPort: number): Promise<void> {
 
         // Separate all "paths" from an arguments into separate attributes.
-        const args = launchArgs.args.map<ILaunchVSCodeArgument>(arg => {
-            if (arg.startsWith('-')) {
-                // arg is an option
-                const pair = arg.split('=', 2);
-                if (pair.length === 2 && (fs.existsSync(pair[1]) || fs.existsSync(pair[1] + '.js'))) {
-                    return { prefix: pair[0] + '=', path: pair[1] };
-                }
-                return { prefix: arg };
-            } else {
-                // arg is a path
-                try {
-                    const stat = fs.lstatSync(arg);
-                    if (stat.isDirectory()) {
-                        return { prefix: '--folder-uri=', path: arg };
-                    } else if (stat.isFile()) {
-                        return { prefix: '--file-uri=', path: arg };
-                    }
-                } catch (err) {
-                    // file not found
-                }
-                return { path: arg }; // just return the path blindly and hope for the best...
-            }
-        });
+        // const args = launchArgs.args.map<ILaunchVSCodeArgument>(arg => {
+        //     if (arg.startsWith('-')) {
+        //         // arg is an option
+        //         const pair = arg.split('=', 2);
+        //         if (pair.length === 2 && (fs.existsSync(pair[1]) || fs.existsSync(pair[1] + '.js'))) {
+        //             return { prefix: pair[0] + '=', path: pair[1] };
+        //         }
+        //         return { prefix: arg };
+        //     } else {
+        //         // arg is a path
+        //         try {
+        //             const stat = fs.lstatSync(arg);
+        //             if (stat.isDirectory()) {
+        //                 return { prefix: '--folder-uri=', path: arg };
+        //             } else if (stat.isFile()) {
+        //                 return { prefix: '--file-uri=', path: arg };
+        //             }
+        //         } catch (err) {
+        //             // file not found
+        //         }
+        //         return { path: arg }; // just return the path blindly and hope for the best...
+        //     }
+        // });
 
+        // if (!launchArgs.noDebug) {
+        //     args.unshift({ prefix: `--inspect-brk-extensions=${debugPort}` });
+        // }
+
+        // args.unshift({ prefix: `--debugId=${launchArgs.__sessionId}` });  // pass the debug session ID so that broadcast events know where they come from
+        let args = [];
         if (!launchArgs.noDebug) {
-            args.unshift({ prefix: `--inspect-brk-extensions=${debugPort}` });
+            args.push(`--debugBrkPluginHost=${debugPort}`);
+
+            // pass the debug session ID to the EH so that broadcast events know where they come from
+            if (launchArgs.__sessionId) {
+                args.push(`--debugId=${launchArgs.__sessionId}`);
+            }
         }
 
-        args.unshift({ prefix: `--debugId=${launchArgs.__sessionId}` });  // pass the debug session ID so that broadcast events know where they come from
+        const runtimeArgs = launchArgs.runtimeArgs || [];
+        const programArgs = launchArgs.args || [];
 
+        // if ADS runs out of sources, add the path to the ADS workspace as a first argument so that Electron turns into ADS
+        const electronIdx = launchArgs.runtimeExecutable.indexOf(process.platform === 'win32' ? '\\.build\\electron\\' : '/.build/electron/');
+        if (electronIdx > 0 && programArgs.length > 0) {
+            // guess the ADS workspace path
+            const vscodeWorkspacePath = launchArgs.runtimeExecutable.substr(0, electronIdx);
+
+            // only add path if user hasn't already added path
+            if (!programArgs[0].startsWith(vscodeWorkspacePath)) {
+                programArgs.unshift(vscodeWorkspacePath);
+            }
+        }
+
+        args = args.concat(runtimeArgs, programArgs);
+        const envArgs = this.collectEnvFileArgs(launchArgs) || launchArgs.env;
+
+        // {{SQL CARBON EDIT}} Launch process directly instead of using launchVSCode request
+        return this.launchInInternalConsole(runtimeExecutable, args, envArgs).then(() => {
+            return launchArgs.noDebug ?
+                Promise.resolve() :
+                this.doAttach(debugPort, undefined, launchArgs.address, launchArgs.timeout);
+        });
+        /*
         const launchVSCodeArgs: ILaunchVSCodeArguments = {
             args: args,
             env: this.collectEnvFileArgs(launchArgs) || launchArgs.env
@@ -357,6 +448,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
                 }
             });
         });
+        */
     }
 
     public async attach(args: IAttachRequestArguments): Promise<void> {
@@ -408,21 +500,22 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         return this._domains.has(<keyof Crdp.ProtocolApi>'TimeTravel');
     }
 
-    private launchInTerminal(termArgs: DebugProtocol.RunInTerminalRequestArguments): Promise<void> {
-        return new Promise<void>((resolve, reject) => {
-            this._session.sendRequest('runInTerminal', termArgs, NodeDebugAdapter.RUNINTERMINAL_TIMEOUT, response => {
-                if (response.success) {
-                    // since node starts in a terminal, we cannot track it with an 'exit' handler
-                    // plan for polling after we have gotten the process pid.
-                    this._pollForNodeProcess = true;
-                    resolve();
-                } else {
-                    reject(errors.cannotLaunchInTerminal(response.message));
-                    this.terminateSession('terminal error: ' + response.message);
-                }
-            });
-        });
-    }
+    // {{SQL CARBON EDIT}} Not needed - only support ext host debugging
+    // private launchInTerminal(termArgs: DebugProtocol.RunInTerminalRequestArguments): Promise<void> {
+    //     return new Promise<void>((resolve, reject) => {
+    //         this._session.sendRequest('runInTerminal', termArgs, NodeDebugAdapter.RUNINTERMINAL_TIMEOUT, response => {
+    //             if (response.success) {
+    //                 // since node starts in a terminal, we cannot track it with an 'exit' handler
+    //                 // plan for polling after we have gotten the process pid.
+    //                 this._pollForNodeProcess = true;
+    //                 resolve();
+    //             } else {
+    //                 reject(errors.cannotLaunchInTerminal(response.message));
+    //                 this.terminateSession('terminal error: ' + response.message);
+    //             }
+    //         });
+    //     });
+    // }
 
     private launchInInternalConsole(runtimeExecutable: string, launchArgs: string[], envArgs?: any, cwd?: string): Promise<void> {
         // merge environment variables into a copy of the process.env
@@ -682,50 +775,51 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         }
     }
 
-    private async resolveProgramPath(programPath: string, sourceMaps: boolean): Promise<string> {
-        logger.verbose(`Launch: Resolving programPath: ${programPath}`);
-        if (!programPath) {
-            return programPath;
-        }
+    // {{SQL CARBON EDIT}} Not needed - only support ext host debugging
+    // private async resolveProgramPath(programPath: string, sourceMaps: boolean): Promise<string> {
+    //     logger.verbose(`Launch: Resolving programPath: ${programPath}`);
+    //     if (!programPath) {
+    //         return programPath;
+    //     }
 
-        if (this.jsDeterminant.isJavaScript(programPath)) {
-            if (!sourceMaps) {
-                return programPath;
-            }
+    //     if (this.jsDeterminant.isJavaScript(programPath)) {
+    //         if (!sourceMaps) {
+    //             return programPath;
+    //         }
 
-            // if programPath is a JavaScript file and sourceMaps are enabled, we don't know whether
-            // programPath is the generated file or whether it is the source (and we need source mapping).
-            // Typically this happens if a tool like 'babel' or 'uglify' is used (because they both transpile js to js).
-            // We use the source maps to find a 'source' file for the given js file.
-            const generatedPath = await this.sourceMapTransformer.getGeneratedPathFromAuthoredPath(programPath);
-            if (generatedPath && generatedPath !== programPath) {
-                // programPath must be source because there seems to be a generated file for it
-                logger.log(`Launch: program '${programPath}' seems to be the source; launch the generated file '${generatedPath}' instead`);
-                programPath = generatedPath;
-            } else {
-                logger.log(`Launch: program '${programPath}' seems to be the generated file`);
-            }
+    //         // if programPath is a JavaScript file and sourceMaps are enabled, we don't know whether
+    //         // programPath is the generated file or whether it is the source (and we need source mapping).
+    //         // Typically this happens if a tool like 'babel' or 'uglify' is used (because they both transpile js to js).
+    //         // We use the source maps to find a 'source' file for the given js file.
+    //         const generatedPath = await this.sourceMapTransformer.getGeneratedPathFromAuthoredPath(programPath);
+    //         if (generatedPath && generatedPath !== programPath) {
+    //             // programPath must be source because there seems to be a generated file for it
+    //             logger.log(`Launch: program '${programPath}' seems to be the source; launch the generated file '${generatedPath}' instead`);
+    //             programPath = generatedPath;
+    //         } else {
+    //             logger.log(`Launch: program '${programPath}' seems to be the generated file`);
+    //         }
 
-            return programPath;
-        } else {
-            // node cannot execute the program directly
-            if (!sourceMaps) {
-                return Promise.reject<string>(errors.cannotLaunchBecauseSourceMaps(programPath));
-            }
+    //         return programPath;
+    //     } else {
+    //         // node cannot execute the program directly
+    //         if (!sourceMaps) {
+    //             return Promise.reject<string>(errors.cannotLaunchBecauseSourceMaps(programPath));
+    //         }
 
-            const generatedPath = await this.sourceMapTransformer.getGeneratedPathFromAuthoredPath(programPath);
-            if (!generatedPath) { // cannot find generated file
-                if (this._launchAttachArgs.outFiles || this._launchAttachArgs.outDir) {
-                    return Promise.reject<string>(errors.cannotLaunchBecauseJsNotFound(programPath));
-                } else {
-                    return Promise.reject<string>(errors.cannotLaunchBecauseOutFiles(programPath));
-                }
-            }
+    //         const generatedPath = await this.sourceMapTransformer.getGeneratedPathFromAuthoredPath(programPath);
+    //         if (!generatedPath) { // cannot find generated file
+    //             if (this._launchAttachArgs.outFiles || this._launchAttachArgs.outDir) {
+    //                 return Promise.reject<string>(errors.cannotLaunchBecauseJsNotFound(programPath));
+    //             } else {
+    //                 return Promise.reject<string>(errors.cannotLaunchBecauseOutFiles(programPath));
+    //             }
+    //         }
 
-            logger.log(`Launch: program '${programPath}' seems to be the source; launch the generated file '${generatedPath}' instead`);
-            return generatedPath;
-        }
-    }
+    //         logger.log(`Launch: program '${programPath}' seems to be the source; launch the generated file '${generatedPath}' instead`);
+    //         return generatedPath;
+    //     }
+    // }
 
     /**
      * Wait 500-5000ms for the entry pause event, and if it doesn't come, move on with life.
@@ -873,10 +967,11 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
     /**
      * 'Path not absolute' error with 'More Information' link.
      */
-    private getRelativePathErrorResponse(attribute: string, path: string): Promise<void> {
-        const format = localize('attribute.path.not.absolute', "Attribute '{0}' is not absolute ('{1}'); consider adding '{2}' as a prefix to make it absolute.", attribute, '{path}', '${workspaceFolder}/');
-        return this.getErrorResponseWithInfoLink(2008, format, { path }, 20003);
-    }
+    // {{SQL CARBON EDIT}} Not needed - only support ext host debugging
+    // private getRelativePathErrorResponse(attribute: string, path: string): Promise<void> {
+    //     const format = localize('attribute.path.not.absolute', "Attribute '{0}' is not absolute ('{1}'); consider adding '{2}' as a prefix to make it absolute.", attribute, '{path}', '${workspaceFolder}/');
+    //     return this.getErrorResponseWithInfoLink(2008, format, { path }, 20003);
+    // }
 
     private getRuntimeNotOnPathErrorResponse(runtime: string): Promise<void> {
         return Promise.reject(new ErrorWithMessage(<DebugProtocol.Message>{
@@ -889,16 +984,17 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
     /**
      * Send error response with 'More Information' link.
      */
-    private getErrorResponseWithInfoLink(code: number, format: string, variables: any, infoId: number): Promise<void> {
-        return Promise.reject(new ErrorWithMessage(<DebugProtocol.Message>{
-            id: code,
-            format,
-            variables,
-            showUser: true,
-            url: 'http://go.microsoft.com/fwlink/?linkID=534832#_' + infoId.toString(),
-            urlLabel: localize('more.information', 'More Information')
-        }));
-    }
+    // {{SQL CARBON EDIT}} Not needed - only support ext host debugging
+    // private getErrorResponseWithInfoLink(code: number, format: string, variables: any, infoId: number): Promise<void> {
+    //     return Promise.reject(new ErrorWithMessage(<DebugProtocol.Message>{
+    //         id: code,
+    //         format,
+    //         variables,
+    //         showUser: true,
+    //         url: 'http://go.microsoft.com/fwlink/?linkID=534832#_' + infoId.toString(),
+    //         urlLabel: localize('more.information', 'More Information')
+    //     }));
+    // }
 
     protected getReadonlyOrigin(aPath: string): string {
         return path.isAbsolute(aPath) || aPath.startsWith(ChromeDebugAdapter.EVAL_NAME_PREFIX) ?
@@ -970,39 +1066,41 @@ export enum DebugArgs {
     Inspect_DebugBrk
 }
 
-const defaultDebugArgs = DebugArgs.InspectBrk;
-function detectSupportedDebugArgsForLaunch(config: ILaunchRequestArguments, runtimeExecutable: string, env: any): DebugArgs {
-    if (config.__nodeVersion || (config.runtimeVersion && config.runtimeVersion !== 'default')) {
-        return getSupportedDebugArgsForVersion(config.__nodeVersion || config.runtimeVersion);
-    } else if (config.runtimeExecutable) {
-        logger.log('Using --inspect-brk because a runtimeExecutable is set');
-        return defaultDebugArgs;
-    } else {
-        // only determine version if no runtimeExecutable is set (and 'node' on PATH is used)
-        logger.log('Spawning `node --version` to determine supported debug args');
-        let result: cp.SpawnSyncReturns<string>;
-        try {
-            result = cp.spawnSync(runtimeExecutable, ['--version']);
-        } catch (e) {
-            logger.error('Node version detection failed: ' + (e && e.message));
-        }
+// {{SQL CARBON EDIT}} Not needed - only support ext host debugging
+// const defaultDebugArgs = DebugArgs.InspectBrk;
+// function detectSupportedDebugArgsForLaunch(config: ILaunchRequestArguments, runtimeExecutable: string, env: any): DebugArgs {
+//     if (config.__nodeVersion || (config.runtimeVersion && config.runtimeVersion !== 'default')) {
+//         return getSupportedDebugArgsForVersion(config.__nodeVersion || config.runtimeVersion);
+//     } else if (config.runtimeExecutable) {
+//         logger.log('Using --inspect-brk because a runtimeExecutable is set');
+//         return defaultDebugArgs;
+//     } else {
+//         // only determine version if no runtimeExecutable is set (and 'node' on PATH is used)
+//         logger.log('Spawning `node --version` to determine supported debug args');
+//         let result: cp.SpawnSyncReturns<string>;
+//         try {
+//             result = cp.spawnSync(runtimeExecutable, ['--version']);
+//         } catch (e) {
+//             logger.error('Node version detection failed: ' + (e && e.message));
+//         }
 
-        const semVerString = result.stdout ? result.stdout.toString().trim() : undefined;
-        if (semVerString) {
-            return getSupportedDebugArgsForVersion(semVerString);
-        } else {
-            logger.log('Using --inspect-brk because we couldn\'t get a version from node');
-            return defaultDebugArgs;
-        }
-    }
-}
+//         const semVerString = result.stdout ? result.stdout.toString().trim() : undefined;
+//         if (semVerString) {
+//             return getSupportedDebugArgsForVersion(semVerString);
+//         } else {
+//             logger.log('Using --inspect-brk because we couldn\'t get a version from node');
+//             return defaultDebugArgs;
+//         }
+//     }
+// }
 
-function getSupportedDebugArgsForVersion(semVerString): DebugArgs {
-    if (utils.compareSemver(semVerString, 'v7.6.0') >= 0) {
-        logger.log(`Using --inspect-brk, Node version ${semVerString} detected`);
-        return DebugArgs.InspectBrk;
-    } else {
-        logger.log(`Using --inspect --debug-brk, Node version ${semVerString} detected`);
-        return DebugArgs.Inspect_DebugBrk;
-    }
-}
+// {{SQL CARBON EDIT}} Not needed - only support ext host debugging
+// function getSupportedDebugArgsForVersion(semVerString): DebugArgs {
+//     if (utils.compareSemver(semVerString, 'v7.6.0') >= 0) {
+//         logger.log(`Using --inspect-brk, Node version ${semVerString} detected`);
+//         return DebugArgs.InspectBrk;
+//     } else {
+//         logger.log(`Using --inspect --debug-brk, Node version ${semVerString} detected`);
+//         return DebugArgs.Inspect_DebugBrk;
+//     }
+// }
