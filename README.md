@@ -46,7 +46,7 @@ Pick the `New Extension (Typescript)` option to quickly get started with an exte
 You can now add breakpoints to your code and debug as needed.
 
 ## Next steps
-Take a look at the [extension samples](https://github.com/Microsoft/azuredatastudio/tree/master/samples) for examples of the type of extension points added to Azure Data Studio. Also look at the [VSCode Extensibility Reference](https://code.visualstudio.com/docs/extensions/overview) - most of the extension points will work, with the exclusion of the debug namespace.
+Take a look at the [extension samples](https://github.com/Microsoft/azuredatastudio/tree/main/samples) for examples of the type of extension points added to Azure Data Studio. Also look at the [VSCode Extensibility Reference](https://code.visualstudio.com/docs/extensions/overview) - most of the extension points will work, with the exclusion of the debug namespace.
 
 Contact the team on [gitter](https://gitter.im/Microsoft/sqlopsstudio) or via our [issues page](https://github.com/Microsoft/azuredatastudio/issues) if you have questions on adding extensions.
 
