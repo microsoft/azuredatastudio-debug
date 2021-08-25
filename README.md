@@ -1,9 +1,11 @@
 # Azure Data Studio Debug
 
-This extension forms the [Azure Data Studio](https://docs.microsoft.com/en-us/sql/azure-data-studio) extension debugging experience.
+This extension forms the [Azure Data Studio](https://docs.microsoft.com/sql/azure-data-studio) extension debugging experience.
 
 # Release Notes
 
+## 1.4
+Updated to latest debugger code to allow debugging newer versions of Azure Data Studio.
 ## 1.2
 Renamed the extension to Azure Data Studio Debug, matching the rename of Azure Data Studio (previously known as SQL Operations Studio).
 
@@ -44,9 +46,9 @@ Pick the `New Extension (Typescript)` option to quickly get started with an exte
 You can now add breakpoints to your code and debug as needed.
 
 ## Next steps
-Take a look at the [extension samples](https://github.com/Microsoft/sqlopsstudio/tree/master/samples) for examples of the type of extension points added to Azure Data Studio. Also look at the [VSCode Extensibility Reference](https://code.visualstudio.com/docs/extensions/overview) - most of the extension points will work, with the exclusion of the debug namespace.
+Take a look at the [extension samples](https://github.com/Microsoft/azuredatastudio/tree/master/samples) for examples of the type of extension points added to Azure Data Studio. Also look at the [VSCode Extensibility Reference](https://code.visualstudio.com/docs/extensions/overview) - most of the extension points will work, with the exclusion of the debug namespace.
 
-Contact the team on [gitter](https://gitter.im/Microsoft/sqlopsstudio) or via our [issues page](https://github.com/Microsoft/sqlopsstudio/issues) if you have questions on adding extensions.
+Contact the team on [gitter](https://gitter.im/Microsoft/sqlopsstudio) or via our [issues page](https://github.com/Microsoft/azuredatastudio/issues) if you have questions on adding extensions.
 
 See a general overview of debugging in VS Code [here](https://code.visualstudio.com/docs/editor/debugging).
 

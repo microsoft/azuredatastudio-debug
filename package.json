@@ -71,10 +71,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/kevcunnane/sqlops-debug.git"
+    "url": "https://github.com/Microsoft/azuredatastudio-debug.git"
   },
   "bugs": {
-    "url": "https://github.com/kevcunnane/sqlops-debug/issues"
+    "url": "https://github.com/Microsoft/azuredatastudio-debug/issues"
   },
   "contributes": {
     "breakpoints": [
