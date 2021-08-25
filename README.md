@@ -22,16 +22,16 @@ To develop an extension you need [Node.js](https://nodejs.org/en/) installed and
 Install Yeoman and the Azure Data Studio Extension generator from the command prompt:
 
 ```sh
-npm install -g yo generator-sqlops
+npm install -g yo generator-azuredatastudio
 ```
 
-## Run yo sqlops
+## Run yo azuredatastudio
 The Yeoman generator will walk you through the steps required to create your customization or extension prompting for the required information.
 
 To launch the generator, type the following in a command prompt:
 
 ```sh
-yo sqlops
+yo azuredatastudio
 ```
 
 ##  Generate a new extension
