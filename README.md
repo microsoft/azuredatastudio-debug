@@ -52,6 +52,13 @@ Contact the team on [gitter](https://gitter.im/Microsoft/sqlopsstudio) or via ou
 
 See a general overview of debugging in VS Code [here](https://code.visualstudio.com/docs/editor/debugging).
 
+# Releasing the extension
+Steps to update the extension on the VS Code Marketplace : 
+
+1. Make changes and update version in package.json
+2. Create a tag in the format `x.x.x` corresponding to the version of the release. This will trigger the CD pipeline to run and attach a built version of the VSIX to the release
+3. Download that VSIX and then run `vsce publish --packagePath <pathToVSIX>`. It will prompt you for your PAT which you can get by following the instructions here : https://code.visualstudio.com/api/working-with-extensions/publishing-extension#get-a-personal-access-token (note that you will also need to be a member of the `ms-mssql` publisher on the Marketplace. Contact repo owners if you're not)
+
 # License
 
 Copyright (c) Microsoft. All rights reserved.
