@@ -398,7 +398,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         // args.unshift({ prefix: `--debugId=${launchArgs.__sessionId}` });  // pass the debug session ID so that broadcast events know where they come from
         let args = [];
         if (!launchArgs.noDebug) {
-            args.push(`--debugBrkPluginHost=${debugPort}`);
+            args.push(`--inspect-brk-extensions=${debugPort}`);
 
             // pass the debug session ID to the EH so that broadcast events know where they come from
             if (launchArgs.__sessionId) {
